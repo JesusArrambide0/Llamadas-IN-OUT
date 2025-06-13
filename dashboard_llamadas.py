@@ -16,33 +16,31 @@ def tiempo_a_segundos(tiempo_str):
     except:
         return 0
 
+def duration_to_seconds(d):
+    if pd.isnull(d):
+        return 0
+    if isinstance(d, str):
+        return tiempo_a_segundos(d)
+    if isinstance(d, pd.Timedelta):
+        return int(d.total_seconds())
+    if isinstance(d, (int, float)):
+        return int(d * 24 * 3600)
+    return 0
+
 st.title("Dashboard de Llamadas Hospital")
 
+# Leer archivo local 'inandout.xlsx' (mismo directorio)
 try:
-    # Cargo sin filtro para limpiar nombres
     df = pd.read_excel("inandout.xlsx")
-    # Limpio nombres de columnas: quito espacios y comillas
-    df.columns = df.columns.str.strip().str.replace('"', '').str.replace('\t','')
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Columnas que usaremos, con nombres limpios
-use_cols = [
-    "Agent Name", "Call Start Time", "Call End Time", "Duration",
-    "Called Number", "Call Type", "Talk Time"
-]
+# Mostrar muestras para entender el formato de Duration y Talk Time
+st.write("Muestras de 'Duration':", df["Duration"].unique()[:10])
+st.write("Muestras de 'Talk Time':", df["Talk Time"].unique()[:10])
 
-# Verifico que todas las columnas existan en el dataframe
-faltantes = [col for col in use_cols if col not in df.columns]
-if faltantes:
-    st.error(f"Faltan columnas en el archivo Excel: {faltantes}")
-    st.stop()
-
-# Filtrar sólo las columnas necesarias
-df = df[use_cols]
-
-# Limpieza en "Talk Time"
+# Limpieza columnas
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
 
 # Clasificar llamadas internas y externas según Called Number
@@ -55,13 +53,13 @@ df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
     lambda x: "Saliente" if "outbound" in x else "Entrante"
 )
 
-# Detectar llamadas salientes no contestadas (Talk Time = "0:00", "0:00:00" o "00:00:00")
+# Detectar llamadas salientes no contestadas (Talk Time = "0:00" o "0:00:00")
 df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
-                        (df["Talk Time"].isin(["0:00", "0:00:00", "00:00:00"])))
+                        (df["Talk Time"].isin(["0:00", "0:00:00", "00:00:00", "0:00:00"])))
 
-# Convertir Duration y Talk Time a segundos
-df["Duración Segundos"] = df["Duration"].astype(str).apply(tiempo_a_segundos)
-df["Talk Segundos"] = df["Talk Time"].apply(tiempo_a_segundos)
+# Convertir Duration y Talk Time a segundos usando la función mejorada
+df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
+df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
 # Indicadores generales
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
