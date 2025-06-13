@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# Función para convertir tiempos tipo "0:00:12" a segundos
+# Función para convertir tiempos tipo "0:00:12" o "00:00:12" o "0:12" a segundos
 def tiempo_a_segundos(tiempo_str):
     try:
         parts = tiempo_str.strip().split(':')
@@ -12,36 +12,29 @@ def tiempo_a_segundos(tiempo_str):
             m, s = parts
         else:
             return 0
-        return int(h)*3600 + int(m)*60 + int(s)
+        return int(h)*3600 + int(m)*60 + int(float(s))
     except:
         return 0
 
 st.title("Dashboard de Llamadas Hospital")
 
-# Leer archivo completo para limpiar columnas
+# Leer archivo local 'inandout.xlsx' (mismo directorio)
 try:
-    df_temp = pd.read_excel("inandout.xlsx")
+    df = pd.read_excel("inandout.xlsx", usecols=[
+        "Agent Name", "Call Start Time", "Call End Time", "Duration",
+        "Called Number", "Call Type", "Talk Time"
+    ])
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpiar espacios en nombres de columnas
-df_temp.columns = df_temp.columns.str.strip()
-
-# Columnas que necesitamos
-columnas_necesarias = [
-    "Agent Name", "Call Start Time", "Call End Time", "Duration",
-    "Called Number", "Call Type", "Talk Time"
-]
-
-# Filtrar columnas que realmente existen en el archivo
-columnas_existentes = [col for col in columnas_necesarias if col in df_temp.columns]
-
-# Tomar solo las columnas que sí existen
-df = df_temp[columnas_existentes].copy()
-
-# Limpiar Talk Time (stripped)
+# Limpieza columnas de tiempo
+df["Duration"] = df["Duration"].astype(str).str.strip()
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
+
+# Convertir Duration y Talk Time a segundos
+df["Duración Segundos"] = df["Duration"].apply(tiempo_a_segundos)
+df["Talk Segundos"] = df["Talk Time"].apply(tiempo_a_segundos)
 
 # Clasificar llamadas internas y externas según Called Number
 df["Tipo Número"] = df["Called Number"].astype(str).apply(
@@ -53,13 +46,8 @@ df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
     lambda x: "Saliente" if "outbound" in x else "Entrante"
 )
 
-# Detectar llamadas salientes no contestadas (Talk Time = "0:00" o "0:00:00")
-df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
-                        (df["Talk Time"].isin(["0:00", "0:00:00", "00:00:00"])))
-
-# Convertir Duration y Talk Time a segundos
-df["Duración Segundos"] = df["Duration"].astype(str).apply(tiempo_a_segundos)
-df["Talk Segundos"] = df["Talk Time"].apply(tiempo_a_segundos)
+# Detectar llamadas salientes no contestadas (Talk Time = 0 segundos)
+df["No Contestadas"] = ( (df["Tipo Llamada"] == "Saliente") & (df["Talk Segundos"] == 0) )
 
 # Indicadores generales
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
@@ -77,7 +65,7 @@ st.write(f"Llamadas Salientes no contestadas: **{total_no_contestadas}**")
 
 # Indicadores por agente con filtro
 st.header("Indicadores por Agente")
-agentes = df["Agent Name"].unique()
+agentes = df["Agent Name"].dropna().unique()
 agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=agentes)
 
 df_agente = df[df["Agent Name"] == agente_seleccionado]
