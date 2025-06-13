@@ -37,9 +37,6 @@ except FileNotFoundError:
 # Limpiar espacios y tabuladores en nombres de columnas
 df.columns = df.columns.str.replace('\t', '').str.strip()
 
-# Mostrar columnas para verificar
-st.write("Columnas cargadas:", df.columns.tolist())
-
 if "Talk Time" not in df.columns:
     st.error("La columna 'Talk Time' no existe en el archivo. Revisa el nombre exacto.")
     st.stop()
@@ -76,7 +73,6 @@ st.write(f"Tiempo total en llamadas Entrantes: **{tiempo_entrantes // 60} min**"
 st.write(f"Tiempo total en llamadas Salientes: **{tiempo_salientes // 60} min**")
 st.write(f"Llamadas Salientes no contestadas: **{total_no_contestadas}**")
 
-# Indicadores por agente con filtro
 st.header("Indicadores por Agente")
 agentes = df["Agent Name"].unique()
 agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=agentes)
