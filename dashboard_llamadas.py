@@ -18,17 +18,29 @@ def tiempo_a_segundos(tiempo_str):
 
 st.title("Dashboard de Llamadas Hospital")
 
-# Leer archivo local 'inandout.xlsx' (mismo directorio)
+# Leer archivo completo para limpiar columnas
 try:
-    df = pd.read_excel("inandout.xlsx", usecols=[
-        "Agent Name", "Call Start Time", "Call End Time", "Duration",
-        "Called Number", "Call Type", "Talk Time"
-    ])
+    df_temp = pd.read_excel("inandout.xlsx")
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpieza columnas
+# Limpiar espacios en nombres de columnas
+df_temp.columns = df_temp.columns.str.strip()
+
+# Columnas que necesitamos
+columnas_necesarias = [
+    "Agent Name", "Call Start Time", "Call End Time", "Duration",
+    "Called Number", "Call Type", "Talk Time"
+]
+
+# Filtrar columnas que realmente existen en el archivo
+columnas_existentes = [col for col in columnas_necesarias if col in df_temp.columns]
+
+# Tomar solo las columnas que sí existen
+df = df_temp[columnas_existentes].copy()
+
+# Limpiar Talk Time (stripped)
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
 
 # Clasificar llamadas internas y externas según Called Number
