@@ -36,13 +36,6 @@ except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpiar espacios en los nombres de columnas por si acaso
-df.columns = [col.strip() for col in df.columns]
-
-# Mostrar muestras para entender el formato de Duration y Talk Time
-st.write("Muestras de 'Duration':", df["Duration"].unique()[:10])
-st.write("Muestras de 'Talk Time':", df["Talk Time"].unique()[:10])
-
 # Limpieza columnas
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
 
@@ -53,22 +46,23 @@ df["Tipo Número"] = df["Called Number"].astype(str).apply(
 
 # Clasificar llamadas entrantes y salientes
 df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
-    lambda x: "saliente" if "outbound" in x else "entrante"
+    lambda x: "Saliente" if "outbound" in x else "Entrante"
 )
 
-# Detectar llamadas salientes no contestadas (Talk Time = "0:00" o "0:00:00")
-df["No Contestadas"] = ((df["Tipo Llamada"] == "saliente") & 
-                        (df["Talk Time"].isin(["0:00", "0:00:00", "00:00:00", "0:00:00"])))
+# Detectar llamadas salientes no contestadas (Outbound on IPCC y Talk Time = "0:00:00")
+df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
+                        (df["Call Type"].str.contains("outbound on ipcc", case=False)) &
+                        (df["Talk Time"] == "0:00:00"))
 
 # Convertir Duration y Talk Time a segundos usando la función mejorada
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
 # Indicadores generales
-total_entrantes = df[df["Tipo Llamada"] == "entrante"].shape[0]
-total_salientes = df[df["Tipo Llamada"] == "saliente"].shape[0]
-tiempo_entrantes = df[df["Tipo Llamada"] == "entrante"]["Duración Segundos"].sum()
-tiempo_salientes = df[df["Tipo Llamada"] == "saliente"]["Duración Segundos"].sum()
+total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
+total_salientes = df[df["Tipo Llamada"] == "Saliente"].shape[0]
+tiempo_entrantes = df[df["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
+tiempo_salientes = df[df["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
 total_no_contestadas = df["No Contestadas"].sum()
 
 st.header("Indicadores Generales")
@@ -85,10 +79,10 @@ agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=
 
 df_agente = df[df["Agent Name"] == agente_seleccionado]
 
-llamadas_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "entrante"].shape[0]
-llamadas_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "saliente"].shape[0]
-tiempo_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "entrante"]["Duración Segundos"].sum()
-tiempo_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "saliente"]["Duración Segundos"].sum()
+llamadas_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"].shape[0]
+llamadas_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"].shape[0]
+tiempo_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
+tiempo_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
 no_contestadas_agente = df_agente["No Contestadas"].sum()
 
 st.write(f"Agente: **{agente_seleccionado}**")
