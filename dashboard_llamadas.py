@@ -29,36 +29,42 @@ def duration_to_seconds(d):
 
 st.title("Dashboard de Llamadas Hospital")
 
-# Leer archivo local 'inandout.xlsx' (mismo directorio)
+# Leer archivo
 try:
     df = pd.read_excel("inandout.xlsx")
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Mostrar muestras para entender el formato de Duration y Talk Time
-st.write("Muestras de 'Duration':", df["Duration"].unique()[:10])
-st.write("Muestras de 'Talk Time':", df["Talk Time"].unique()[:10])
+# Mostrar columnas originales
+st.write("Columnas originales:")
+st.write(df.columns.tolist())
 
-# Limpieza columnas
+# Limpiar nombres de columnas (quitar espacios, tabulaciones, comillas)
+df.columns = df.columns.str.strip().str.replace('"', '').str.replace('\t', '')
+
+# Mostrar columnas limpias
+st.write("Columnas limpias:")
+st.write(df.columns.tolist())
+
+# Limpieza columnas importantes
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
+df["Called Number"] = df["Called Number"].astype(str).str.strip()
+df["Call Type"] = df["Call Type"].astype(str).str.lower()
 
 # Clasificar llamadas internas y externas según Called Number
-df["Tipo Número"] = df["Called Number"].astype(str).apply(
-    lambda x: "Interno" if x.startswith("85494") else "Externo"
-)
+df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
 
 # Clasificar llamadas entrantes y salientes
-df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
-    lambda x: "Saliente" if "outbound" in x else "Entrante"
-)
+df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "outbound" in x else "Entrante")
 
-# Convertir Duration y Talk Time a segundos usando la función mejorada
+# Detectar llamadas salientes no contestadas (Talk Time = "0:00", "0:00:00", etc)
+df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
+                        (df["Talk Time"].isin(["0:00", "0:00:00", "00:00:00", "0:00:00"])))
+
+# Convertir Duration y Talk Time a segundos
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
-
-# Detectar llamadas salientes no contestadas (Talk Segundos == 0)
-df["No Contestadas"] = ( (df["Tipo Llamada"] == "Saliente") & (df["Talk Segundos"] == 0) )
 
 # Indicadores generales
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
