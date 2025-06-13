@@ -36,11 +36,14 @@ except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Mostrar muestras para entender el formato de Duration y Talk Time
-st.write("Muestras de 'Duration':", df["Duration"].unique()[:10])
-st.write("Muestras de 'Talk Time':", df["Talk Time"].unique()[:10])
+# Limpiar nombres de columnas: quitar comillas dobles, tabulaciones y espacios
+df.columns = df.columns.str.replace('"', '', regex=False)\
+                       .str.replace('\t', '', regex=True)\
+                       .str.strip()
 
-# Limpieza columnas
+st.write("Columnas limpias:", df.columns.tolist())
+
+# Limpieza columnas específicas
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
 
 # Clasificar llamadas internas y externas según Called Number
