@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-# Función para convertir tiempos tipo "0:00:12" a segundos
 def tiempo_a_segundos(tiempo_str):
     try:
         parts = tiempo_str.strip().split(':')
@@ -29,36 +28,38 @@ def duration_to_seconds(d):
 
 st.title("Dashboard de Llamadas Hospital")
 
-# Leer archivo local 'inandout.xlsx' (mismo directorio)
 try:
     df = pd.read_excel("inandout.xlsx")
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpieza columnas
+# Mostrar columnas y limpiar espacios
+st.write("Columnas cargadas:", df.columns.tolist())
+df.columns = df.columns.str.strip()
+
+# Verificar si la columna 'Talk Time' existe
+if "Talk Time" not in df.columns:
+    st.error("La columna 'Talk Time' no existe en el archivo. Revisa el nombre exacto.")
+    st.stop()
+
 df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
 
-# Clasificar llamadas internas y externas según Called Number
 df["Tipo Número"] = df["Called Number"].astype(str).apply(
     lambda x: "Interno" if x.startswith("85494") else "Externo"
 )
 
-# Clasificar llamadas entrantes y salientes
 df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
     lambda x: "Saliente" if "outbound" in x else "Entrante"
 )
 
-# Detectar llamadas salientes no contestadas (Outbound on IPCC y Talk Time = "0:00:00")
 df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
                         (df["Call Type"].str.contains("outbound on ipcc", case=False)) &
                         (df["Talk Time"] == "0:00:00"))
 
-# Convertir Duration y Talk Time a segundos usando la función mejorada
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
-# Indicadores generales
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
 total_salientes = df[df["Tipo Llamada"] == "Saliente"].shape[0]
 tiempo_entrantes = df[df["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
