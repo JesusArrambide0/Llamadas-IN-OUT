@@ -34,11 +34,12 @@ except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Mostrar columnas y limpiar espacios
-st.write("Columnas cargadas:", df.columns.tolist())
-df.columns = df.columns.str.strip()
+# Limpiar espacios y tabuladores en nombres de columnas
+df.columns = df.columns.str.replace('\t', '').str.strip()
 
-# Verificar si la columna 'Talk Time' existe
+# Mostrar columnas para verificar
+st.write("Columnas cargadas:", df.columns.tolist())
+
 if "Talk Time" not in df.columns:
     st.error("La columna 'Talk Time' no existe en el archivo. Revisa el nombre exacto.")
     st.stop()
@@ -53,9 +54,11 @@ df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
     lambda x: "Saliente" if "outbound" in x else "Entrante"
 )
 
-df["No Contestadas"] = ((df["Tipo Llamada"] == "Saliente") & 
-                        (df["Call Type"].str.contains("outbound on ipcc", case=False)) &
-                        (df["Talk Time"] == "0:00:00"))
+df["No Contestadas"] = (
+    (df["Tipo Llamada"] == "Saliente") & 
+    (df["Call Type"].str.contains("outbound on ipcc", case=False)) &
+    (df["Talk Time"] == "0:00:00")
+)
 
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
