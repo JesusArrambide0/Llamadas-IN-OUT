@@ -32,6 +32,17 @@ def duration_to_seconds(d):
 def formatear_tiempo(segundos):
     return str(timedelta(seconds=int(segundos)))
 
+def normalizar_talk_time(valor):
+    if pd.isnull(valor):
+        return "0:00:00"
+    if isinstance(valor, pd.Timestamp):
+        return valor.strftime("%H:%M:%S")
+    if hasattr(valor, 'strftime'):
+        return valor.strftime("%H:%M:%S")
+    if isinstance(valor, (float, int)):
+        return str(timedelta(seconds=int(valor)))
+    return str(valor).strip()
+
 st.title("📞 Dashboard de Llamadas Hospital")
 
 # Cargar archivo
@@ -44,7 +55,7 @@ except FileNotFoundError:
 # Limpieza de columnas (sin cambiar a minúsculas)
 df.columns = [col.strip().replace('"', '') for col in df.columns]
 df["Call Type"] = df["Call Type"].astype(str).str.strip()
-df["Talk Time"] = df["Talk Time"].fillna("0:00:00").astype(str).str.strip()
+df["Talk Time"] = df["Talk Time"].apply(normalizar_talk_time)
 df["Called Number"] = df["Called Number"].astype(str).str.strip()
 df["Agent Name"] = df["Agent Name"].astype(str).str.strip()
 
