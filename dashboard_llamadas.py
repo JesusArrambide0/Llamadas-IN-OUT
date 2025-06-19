@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
+from datetime import timedelta
 
 # Función para convertir tiempos tipo "0:00:12" a segundos
 def tiempo_a_segundos(tiempo_str):
@@ -27,58 +29,96 @@ def duration_to_seconds(d):
         return int(d * 24 * 3600)
     return 0
 
-st.title("Dashboard de Llamadas Hospital")
+def formatear_tiempo(segundos):
+    return str(timedelta(seconds=int(segundos)))
 
-# Leer archivo local 'inandout.xlsx' (mismo directorio)
+st.title("📞 Dashboard de Llamadas Hospital")
+
+# Leer archivo
 try:
     df = pd.read_excel("inandout.xlsx")
 except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpiar espacios en columnas que tienen nombres con espacios al final o comillas
+# Limpieza de columnas
 df.columns = [col.strip().replace('"', '') for col in df.columns]
+df["Call Type"] = df["Call Type"].astype(str).str.strip().str.lower()
+df["Talk Time"] = df["Talk Time"].fillna("0:00:00").astype(str).str.strip()
+df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-# Limpiar Talk Time de espacios
-df["Talk Time"] = df["Talk Time"].astype(str).str.strip()
+# Clasificaciones
+df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
+df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "outbound" in x else "Entrante")
 
-# Clasificar llamadas internas y externas según Called Number
-df["Tipo Número"] = df["Called Number"].astype(str).apply(
-    lambda x: "Interno" if x.startswith("85494") else "Externo"
-)
+# Llamadas salientes no contestadas
+df["No Contestadas"] = (df["Call Type"] == "outbound on ipcc") & (df["Talk Time"] == "0:00:00")
 
-# Clasificar llamadas entrantes y salientes
-df["Tipo Llamada"] = df["Call Type"].astype(str).str.lower().apply(
-    lambda x: "Saliente" if "outbound" in x else "Entrante"
-)
-
-# Detectar llamadas salientes no contestadas (Call Type = "Outbound on IPCC" y Talk Time = "0:00:00")
-df["No Contestadas"] = (
-    (df["Call Type"].str.lower() == "outbound on ipcc") &
-    (df["Talk Time"] == "0:00:00")
-)
-
-# Convertir Duration y Talk Time a segundos usando la función mejorada
+# Conversión de duración
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
-# Indicadores generales
+# ----------------------------------
+# INDICADORES GENERALES
+# ----------------------------------
+
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
 total_salientes = df[df["Tipo Llamada"] == "Saliente"].shape[0]
 tiempo_entrantes = df[df["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
 tiempo_salientes = df[df["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
 total_no_contestadas = df["No Contestadas"].sum()
 
-st.header("Indicadores Generales")
-st.write(f"Llamadas Entrantes: **{total_entrantes}**")
-st.write(f"Llamadas Salientes: **{total_salientes}**")
-st.write(f"Tiempo total en llamadas Entrantes: **{tiempo_entrantes // 60} min**")
-st.write(f"Tiempo total en llamadas Salientes: **{tiempo_salientes // 60} min**")
-st.write(f"Llamadas Salientes no contestadas: **{total_no_contestadas}**")
+st.header("📊 Indicadores Generales")
 
-# Indicadores por agente con filtro
-st.header("Indicadores por Agente")
-agentes = df["Agent Name"].unique()
+col1, col2, col3 = st.columns(3)
+col1.metric("Llamadas Entrantes", total_entrantes)
+col2.metric("Llamadas Salientes", total_salientes)
+col3.metric("Salientes No Contestadas", total_no_contestadas)
+
+st.write(f"⏱️ Tiempo total en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes)}**")
+st.write(f"⏱️ Tiempo total en llamadas Salientes: **{formatear_tiempo(tiempo_salientes)}**")
+
+# ----------------------------------
+# VISUALIZACIONES PLOTLY
+# ----------------------------------
+
+st.subheader("📈 Visualizaciones Generales")
+
+# A. Tipo de llamada
+conteo_tipo = df["Tipo Llamada"].value_counts().reset_index()
+conteo_tipo.columns = ["Tipo Llamada", "Cantidad"]
+fig_tipo = px.bar(conteo_tipo, x="Tipo Llamada", y="Cantidad", title="Cantidad de Llamadas por Tipo",
+                  color="Tipo Llamada", text="Cantidad")
+st.plotly_chart(fig_tipo)
+
+# B. Por agente
+conteo_agente = df.groupby("Agent Name").size().reset_index(name="Total Llamadas")
+fig_agente = px.bar(conteo_agente.sort_values("Total Llamadas", ascending=False),
+                    x="Agent Name", y="Total Llamadas", title="Total de llamadas por agente",
+                    text="Total Llamadas")
+fig_agente.update_layout(xaxis={'categoryorder':'total descending'})
+st.plotly_chart(fig_agente)
+
+# C. Histograma duración
+fig_duracion = px.histogram(df[df["Talk Segundos"] > 0], 
+                            x="Talk Segundos", nbins=30,
+                            title="Distribución de Duración de Llamadas (en segundos)")
+st.plotly_chart(fig_duracion)
+
+# D. Llamadas por día
+if "Call Start Time" in df.columns:
+    df["Call Start Time"] = pd.to_datetime(df["Call Start Time"], errors="coerce")
+    llamadas_diarias = df.groupby(df["Call Start Time"].dt.date).size().reset_index(name="Cantidad")
+    fig_diario = px.line(llamadas_diarias, x="Call Start Time", y="Cantidad",
+                         title="Llamadas por Día", markers=True)
+    st.plotly_chart(fig_diario)
+
+# ----------------------------------
+# DETALLE POR AGENTE
+# ----------------------------------
+
+st.header("👤 Indicadores por Agente")
+agentes = sorted(df["Agent Name"].dropna().unique())
 agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=agentes)
 
 df_agente = df[df["Agent Name"] == agente_seleccionado]
@@ -89,9 +129,9 @@ tiempo_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"]["Du
 tiempo_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
 no_contestadas_agente = df_agente["No Contestadas"].sum()
 
-st.write(f"Agente: **{agente_seleccionado}**")
-st.write(f"Llamadas Entrantes: **{llamadas_entrantes_agente}**")
-st.write(f"Llamadas Salientes: **{llamadas_salientes_agente}**")
-st.write(f"Tiempo en llamadas Entrantes: **{tiempo_entrantes_agente // 60} min**")
-st.write(f"Tiempo en llamadas Salientes: **{tiempo_salientes_agente // 60} min**")
-st.write(f"Llamadas Salientes no contestadas: **{no_contestadas_agente}**")
+st.write(f"**Agente:** {agente_seleccionado}")
+st.write(f"📥 Llamadas Entrantes: **{llamadas_entrantes_agente}**")
+st.write(f"📤 Llamadas Salientes: **{llamadas_salientes_agente}**")
+st.write(f"⏱️ Tiempo en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes_agente)}**")
+st.write(f"⏱️ Tiempo en llamadas Salientes: **{formatear_tiempo(tiempo_salientes_agente)}**")
+st.write(f"❌ Llamadas Salientes no contestadas: **{no_contestadas_agente}**")
