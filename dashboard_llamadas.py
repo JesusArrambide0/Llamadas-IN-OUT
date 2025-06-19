@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import timedelta
+import re
 
 # Función para convertir duración en formato [h]:mm:ss a segundos
 def talk_time_a_segundos(tiempo_str):
@@ -38,6 +39,12 @@ def duration_to_seconds(d):
 def formatear_tiempo(segundos):
     return str(timedelta(seconds=int(segundos)))
 
+# Función para limpiar espacios y caracteres invisibles
+def limpiar_texto(s):
+    if isinstance(s, str):
+        return re.sub(r'\s+', '', s)
+    return s
+
 st.title("📞 Dashboard de Llamadas Hospital")
 
 # Cargar archivo
@@ -50,8 +57,9 @@ except FileNotFoundError:
 # Limpieza de columnas
 df.columns = [col.strip().replace('"', '') for col in df.columns]
 
-df["Call Type"] = df["Call Type"].astype(str).str.strip()
-df["Talk Time"] = df["Talk Time"].fillna("0:00:00").astype(str).str.strip()
+# Limpieza estricta de 'Call Type' y 'Talk Time'
+df["Call Type Limpio"] = df["Call Type"].astype(str).apply(limpiar_texto)
+df["Talk Time Limpio"] = df["Talk Time"].fillna("0:00:00").astype(str).apply(limpiar_texto)
 df["Called Number"] = df["Called Number"].astype(str).str.strip()
 df["Agent Name"] = df["Agent Name"].astype(str).str.strip()
 
@@ -70,13 +78,13 @@ if isinstance(rango, tuple) and len(rango) == 2:
     df = df[(df["Call Start Time"].dt.date >= rango[0]) & (df["Call Start Time"].dt.date <= rango[1])]
 
 # Clasificación de llamadas
-df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "Outbound" in x else "Entrante")
+df["Tipo Llamada"] = df["Call Type"].astype(str).apply(lambda x: "Saliente" if "Outbound" in x else "Entrante")
 df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
 
-# Detectar llamadas no contestadas (condición estricta)
+# Detectar llamadas no contestadas con limpieza estricta
 df["No Contestadas"] = (
-    (df["Call Type"] == "Outbound on IPCC") &
-    (df["Talk Time"] == "0:00:00")
+    (df["Call Type Limpio"] == "OutboundonIPCC") &
+    (df["Talk Time Limpio"] == "0:00:00")
 )
 
 # Conversión a segundos usando la función robusta para métricas
