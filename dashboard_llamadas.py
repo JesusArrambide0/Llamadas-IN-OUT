@@ -33,15 +33,15 @@ def formatear_tiempo(segundos):
     return str(timedelta(seconds=int(segundos)))
 
 def normalizar_talk_time(valor):
-    if pd.isnull(valor):
-        return "0:00:00"
-    if isinstance(valor, pd.Timestamp):
-        return valor.strftime("%H:%M:%S")
-    if hasattr(valor, 'strftime'):
-        return valor.strftime("%H:%M:%S")
-    if isinstance(valor, (float, int)):
-        return str(timedelta(seconds=int(valor)))
-    return str(valor).strip()
+    try:
+        if pd.isnull(valor):
+            return "0:00:00"
+        if hasattr(valor, 'strftime'):
+            return valor.strftime("%H:%M:%S")
+        tiempo = pd.to_datetime(str(valor), errors='coerce').time()
+        return tiempo.strftime("%H:%M:%S")
+    except:
+        return str(valor).strip()
 
 st.title("📞 Dashboard de Llamadas Hospital")
 
@@ -52,7 +52,7 @@ except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpieza de columnas (sin cambiar a minúsculas)
+# Limpieza y normalización
 df.columns = [col.strip().replace('"', '') for col in df.columns]
 df["Call Type"] = df["Call Type"].astype(str).str.strip()
 df["Talk Time"] = df["Talk Time"].apply(normalizar_talk_time)
@@ -81,10 +81,10 @@ df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswi
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
-# Llamadas salientes no contestadas (condición exacta)
+# Llamadas salientes no contestadas: duración <= 1 segundo y tipo correcto
 df["No Contestadas"] = (
     (df["Call Type"] == "Outbound on IPCC") &
-    (df["Talk Time"] == "0:00:00")
+    (df["Talk Segundos"] <= 1)
 )
 
 # Indicadores generales
