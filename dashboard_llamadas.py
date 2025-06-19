@@ -73,15 +73,15 @@ if isinstance(rango, tuple) and len(rango) == 2:
 df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "Outbound" in x else "Entrante")
 df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
 
-# Conversión a segundos usando la función robusta
+# Detectar llamadas no contestadas (condición estricta)
+df["No Contestadas"] = (
+    (df["Call Type"] == "Outbound on IPCC") &
+    (df["Talk Time"] == "0:00:00")
+)
+
+# Conversión a segundos usando la función robusta para métricas
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(talk_time_a_segundos)
-
-# Detectar llamadas salientes no contestadas (Outbound on IPCC con Talk Segundos == 0)
-df["No Contestadas"] = (
-    (df["Call Type"].str.strip() == "Outbound on IPCC") &
-    (df["Talk Segundos"] == 0)
-)
 
 # ----------------------------------
 # INDICADORES GENERALES
