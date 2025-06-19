@@ -42,7 +42,7 @@ def formatear_tiempo(segundos):
 # Función para limpiar espacios y caracteres invisibles
 def limpiar_texto(s):
     if isinstance(s, str):
-        return re.sub(r'\s+', '', s)
+        return re.sub(r'\s+', ' ', s).strip()
     return s
 
 st.title("📞 Dashboard de Llamadas Hospital")
@@ -58,7 +58,7 @@ except FileNotFoundError:
 df.columns = [col.strip().replace('"', '') for col in df.columns]
 
 # Limpieza estricta de 'Call Type' y 'Talk Time'
-df["Call Type Limpio"] = df["Call Type"].astype(str).apply(limpiar_texto)
+df["Call Type Limpio"] = df["Call Type"].astype(str).apply(limpiar_texto).str.lower()
 df["Talk Time Limpio"] = df["Talk Time"].fillna("0:00:00").astype(str).apply(limpiar_texto)
 df["Called Number"] = df["Called Number"].astype(str).str.strip()
 df["Agent Name"] = df["Agent Name"].astype(str).str.strip()
@@ -81,9 +81,9 @@ if isinstance(rango, tuple) and len(rango) == 2:
 df["Tipo Llamada"] = df["Call Type"].astype(str).apply(lambda x: "Saliente" if "Outbound" in x else "Entrante")
 df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
 
-# Detectar llamadas no contestadas con limpieza estricta
+# Detectar llamadas no contestadas: Outbound on IPCC con Talk Time 0:00:00 exacto
 df["No Contestadas"] = (
-    (df["Call Type Limpio"] == "OutboundonIPCC") &
+    (df["Call Type Limpio"] == "outbound on ipcc") &
     (df["Talk Time Limpio"] == "0:00:00")
 )
 
@@ -110,6 +110,19 @@ col3.metric("Salientes No Contestadas", total_no_contestadas)
 
 st.write(f"⏱️ Tiempo total en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes)}**")
 st.write(f"⏱️ Tiempo total en llamadas Salientes: **{formatear_tiempo(tiempo_salientes)}**")
+
+# Resumen específico Outbound on IPCC con tiempo 0
+outbound_ipcc = df[df["Call Type Limpio"] == "outbound on ipcc"]
+outbound_ipcc_0 = outbound_ipcc[outbound_ipcc["Talk Segundos"] == 0]
+
+df_resumen_ipcc = pd.DataFrame({
+    "Total Outbound on IPCC": [len(outbound_ipcc)],
+    "Outbound on IPCC con tiempo 0": [len(outbound_ipcc_0)],
+    "Porcentaje (%)": [len(outbound_ipcc_0) / len(outbound_ipcc) * 100 if len(outbound_ipcc) > 0 else 0]
+})
+
+st.write("### Resumen llamadas Outbound on IPCC con duración 0")
+st.write(df_resumen_ipcc)
 
 # ----------------------------------
 # VISUALIZACIONES PLOTLY
