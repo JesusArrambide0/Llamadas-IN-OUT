@@ -41,9 +41,9 @@ except FileNotFoundError:
     st.error("Archivo 'inandout.xlsx' no encontrado en el directorio actual.")
     st.stop()
 
-# Limpieza y procesamiento
+# Limpieza de columnas (sin cambiar a minúsculas)
 df.columns = [col.strip().replace('"', '') for col in df.columns]
-df["Call Type"] = df["Call Type"].astype(str).str.strip().str.lower()
+df["Call Type"] = df["Call Type"].astype(str).str.strip()
 df["Talk Time"] = df["Talk Time"].fillna("0:00:00").astype(str).str.strip()
 df["Called Number"] = df["Called Number"].astype(str).str.strip()
 df["Agent Name"] = df["Agent Name"].astype(str).str.strip()
@@ -51,9 +51,9 @@ df["Agent Name"] = df["Agent Name"].astype(str).str.strip()
 # Procesar fechas
 if "Call Start Time" in df.columns:
     df["Call Start Time"] = pd.to_datetime(df["Call Start Time"], errors="coerce")
-    df = df.dropna(subset=["Call Start Time"])  # elimina nulos en fecha
+    df = df.dropna(subset=["Call Start Time"])
 
-# Filtro por fecha
+# Filtro de fechas
 st.sidebar.header("📅 Filtro de Fechas")
 min_fecha = df["Call Start Time"].min().date()
 max_fecha = df["Call Start Time"].max().date()
@@ -63,16 +63,16 @@ if isinstance(rango, tuple) and len(rango) == 2:
     df = df[(df["Call Start Time"].dt.date >= rango[0]) & (df["Call Start Time"].dt.date <= rango[1])]
 
 # Clasificación de llamadas
+df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "Outbound" in x else "Entrante")
 df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswith("85494") else "Externo")
-df["Tipo Llamada"] = df["Call Type"].apply(lambda x: "Saliente" if "outbound" in x else "Entrante")
 
 # Conversión de duración
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(duration_to_seconds)
 
-# Llamadas salientes no contestadas (asegurando precisión)
+# Llamadas salientes no contestadas (condición exacta)
 df["No Contestadas"] = (
-    (df["Call Type"] == "outbound on ipcc") &
+    (df["Call Type"] == "Outbound on IPCC") &
     (df["Talk Time"] == "0:00:00")
 )
 
