@@ -185,11 +185,22 @@ with tab2:
     if "Extensión" not in directorio.columns or "Área" not in directorio.columns:
         st.warning("El archivo 'Directorio.xlsx' debe tener columnas 'Extensión' y 'Área'.")
     else:
+        # Normalizar cadenas y extraer solo dígitos para hacer match más robusto
         directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
         df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-        df_ubicado = df.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
+        directorio["Extensión Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
+        df["Called Number Num"] = df["Called Number"].str.extract(r'(\d+)$')
+
+        st.write("Ejemplos 'Called Number Num':", df["Called Number Num"].unique()[:10])
+        st.write("Ejemplos 'Extensión Num' Directorio:", directorio["Extensión Num"].unique()[:10])
+
+        df_ubicado = df.merge(directorio, how="left", left_on="Called Number Num", right_on="Extensión Num")
         df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+
+        no_id = df_ubicado[df_ubicado["Área"] == "No identificado"].shape[0]
+        total = df_ubicado.shape[0]
+        st.write(f"Llamadas sin área identificada: {no_id} de {total} ({no_id/total*100:.2f}%)")
 
         conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
         conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
