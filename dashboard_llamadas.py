@@ -239,3 +239,12 @@ with tab2:
             st.plotly_chart(fig_area)
         else:
             st.warning("❌ No hay coincidencias entre los números Inbound y el directorio.")
+            st.write("### Ejemplos de 'Called Number' en llamadas Inbound:")
+st.write(df_filtrado["Called Number"].drop_duplicates().head(10))
+
+st.write("### Ejemplos de extensiones del directorio:")
+st.write(directorio["Extensión"].drop_duplicates().head(10))
+
+# Coincidencias directas
+coincidencias_inbound = set(df_filtrado["Called Number"]) & set(directorio["Extensión"])
+st.write(f"🔄 Coincidencias exactas entre 'Called Number' Inbound y Directorio: {len(coincidencias_inbound)}")
