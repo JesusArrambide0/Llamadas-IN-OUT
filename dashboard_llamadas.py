@@ -234,3 +234,13 @@ with tab2:
     )
     fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
     st.plotly_chart(fig_area)
+# Diagnóstico de formatos
+st.write("🔍 Ejemplos de 'Called Number' únicos (Inbound):")
+st.write(df_filtrado["Called Number"].drop_duplicates().sort_values().head(20))
+
+st.write("📁 Ejemplos de 'Ex' del Directorio:")
+st.write(directorio["Ex"].drop_duplicates().sort_values().head(20))
+
+# Tipos de dato
+st.write(f"📊 Tipo de dato en Called Number: {df_filtrado['Called Number'].dtype}")
+st.write(f"📊 Tipo de dato en Ex: {directorio['Ex'].dtype}")
