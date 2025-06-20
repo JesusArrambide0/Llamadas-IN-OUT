@@ -173,9 +173,9 @@ with tab1:
 
 # Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
 with tab2:
-    st.header("📍 Conteo de Llamadas Inbound por Área (usando columna 'Ex')")
+    st.header("📍 Conteo de Llamadas Inbound por Área (formato largo '85494XXXX')")
 
-    # --- Cargar directorio desde columnas A y C ---
+    # --- Cargar directorio ---
     try:
         directorio = pd.read_excel("Directorio.xlsx", usecols=[0, 2], header=0)  # A=Ex, C=Área
         directorio.columns = ["Ex", "Área"]
@@ -183,16 +183,18 @@ with tab2:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # --- Limpieza de datos ---
-    directorio["Ex"] = directorio["Ex"].astype(str).str.strip()
+    # --- Preparar el formato correcto ---
+    directorio["Ex"] = directorio["Ex"].astype(str).str.strip().str.zfill(4)
+    directorio["Ex_formato_llamadas"] = "85494" + directorio["Ex"]
+
+    # --- Preparar DataFrame de llamadas ---
     df_filtrado = df.copy()
-    df_filtrado["Called Number"] = df_filtrado["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_filtrado["Called Number"] = df_filtrado["Called Number"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
     # --- Filtro de fechas ---
     if "Call Start Time" in df_filtrado.columns:
         min_fecha = df_filtrado["Call Start Time"].min().date()
         max_fecha = df_filtrado["Call Start Time"].max().date()
-
         rango_tab2 = st.date_input(
             "📅 Selecciona rango de fechas para llamadas Inbound:",
             value=(min_fecha, max_fecha),
@@ -200,32 +202,33 @@ with tab2:
             max_value=max_fecha,
             key="rango_tab2"
         )
-
         if isinstance(rango_tab2, tuple) and len(rango_tab2) == 2:
             df_filtrado = df_filtrado[
                 (df_filtrado["Call Start Time"].dt.date >= rango_tab2[0]) &
                 (df_filtrado["Call Start Time"].dt.date <= rango_tab2[1])
             ]
 
-    # --- Filtrar solo llamadas Inbound ---
+    # --- Filtrar solo Inbound ---
     df_filtrado = df_filtrado[df_filtrado["Call Type"].astype(str).str.contains("Inbound", case=False, na=False)]
+    st.info(f"📥 Total llamadas 'Inbound' tras filtro de fechas: {len(df_filtrado)}")
 
-    total_inbound = len(df_filtrado)
-    st.info(f"📥 Llamadas que contienen 'Inbound': {total_inbound}")
-
-    # --- Unir con Directorio usando 'Ex' ---
-    df_ubicado = df_filtrado.merge(directorio, how="left", left_on="Called Number", right_on="Ex")
+    # --- Merge con directorio usando formato largo ---
+    df_ubicado = df_filtrado.merge(
+        directorio,
+        how="left",
+        left_on="Called Number",
+        right_on="Ex_formato_llamadas"
+    )
     df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
-    # --- Conteo de llamadas por área ---
+    # --- Conteo por área ---
     conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas Inbound")
     conteo_area = conteo_area.sort_values(by="Total Llamadas Inbound", ascending=False)
 
     st.subheader("📊 Total de llamadas Inbound por Área")
     st.dataframe(conteo_area)
 
-    # --- Visualización ---
-    import plotly.express as px
+    # --- Gráfico ---
     fig_area = px.bar(
         conteo_area,
         x="Área", y="Total Llamadas Inbound",
@@ -234,13 +237,3 @@ with tab2:
     )
     fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
     st.plotly_chart(fig_area)
-# Diagnóstico de formatos
-st.write("🔍 Ejemplos de 'Called Number' únicos (Inbound):")
-st.write(df_filtrado["Called Number"].drop_duplicates().sort_values().head(20))
-
-st.write("📁 Ejemplos de 'Ex' del Directorio:")
-st.write(directorio["Ex"].drop_duplicates().sort_values().head(20))
-
-# Tipos de dato
-st.write(f"📊 Tipo de dato en Called Number: {df_filtrado['Called Number'].dtype}")
-st.write(f"📊 Tipo de dato en Ex: {directorio['Ex'].dtype}")
