@@ -173,20 +173,20 @@ with tab1:
 
 # Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
 with tab2:
-    st.header("📍 Conteo de Llamadas Inbound por Área (usando Directorio completo)")
+    st.header("📍 Conteo de Llamadas Inbound por Área (usando columna 'Ex')")
 
-    # --- Cargar directorio ---
+    # --- Cargar directorio desde columnas A y C ---
     try:
-        directorio = pd.read_excel("Directorio.xlsx", usecols=[1, 2], header=0)  # B=Extensión, C=Área
-        directorio.columns = ["Extensión", "Área"]
+        directorio = pd.read_excel("Directorio.xlsx", usecols=[0, 2], header=0)  # A=Ex, C=Área
+        directorio.columns = ["Ex", "Área"]
     except Exception as e:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # --- Preparar datos ---
+    # --- Limpieza de datos ---
+    directorio["Ex"] = directorio["Ex"].astype(str).str.strip()
     df_filtrado = df.copy()
     df_filtrado["Called Number"] = df_filtrado["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
-    directorio["Extensión"] = directorio["Extensión"].astype(str).str.replace('.0', '', regex=False).str.strip()
 
     # --- Filtro de fechas ---
     if "Call Start Time" in df_filtrado.columns:
@@ -210,40 +210,27 @@ with tab2:
     # --- Filtrar solo llamadas Inbound ---
     df_filtrado = df_filtrado[df_filtrado["Call Type"].astype(str).str.contains("Inbound", case=False, na=False)]
 
-    # --- Normalizar extensiones cortas (ej. 7162 -> 854947162) ---
-    df_filtrado["Called Number Normalizado"] = df_filtrado["Called Number"].apply(
-        lambda x: "85494" + x.zfill(4) if x.isdigit() and len(x) == 4 else x
-    )
-
-    # --- Diagnóstico ---
     total_inbound = len(df_filtrado)
     st.info(f"📥 Llamadas que contienen 'Inbound': {total_inbound}")
 
-    # --- Cruce con Directorio ---
-    coincidencias = set(df_filtrado["Called Number Normalizado"]) & set(directorio["Extensión"])
-    st.write(f"🔎 Coincidencias exactas encontradas (Inbound normalizado): {len(coincidencias)}")
+    # --- Unir con Directorio usando 'Ex' ---
+    df_ubicado = df_filtrado.merge(directorio, how="left", left_on="Called Number", right_on="Ex")
+    df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
-    if coincidencias:
-        df_ubicado = df_filtrado.merge(
-            directorio, how="left", left_on="Called Number Normalizado", right_on="Extensión"
-        )
-        df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+    # --- Conteo de llamadas por área ---
+    conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas Inbound")
+    conteo_area = conteo_area.sort_values(by="Total Llamadas Inbound", ascending=False)
 
-        conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas Inbound")
-        conteo_area = conteo_area.sort_values(by="Total Llamadas Inbound", ascending=False)
+    st.subheader("📊 Total de llamadas Inbound por Área")
+    st.dataframe(conteo_area)
 
-        st.subheader("📊 Total de llamadas Inbound por Área")
-        st.dataframe(conteo_area)
-
-        # --- Gráfico ---
-        import plotly.express as px
-        fig_area = px.bar(
-            conteo_area,
-            x="Área", y="Total Llamadas Inbound",
-            title="Total de llamadas Inbound por Área",
-            text="Total Llamadas Inbound"
-        )
-        fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
-        st.plotly_chart(fig_area)
-    else:
-        st.warning("❌ No hay coincidencias entre los 'Called Number' Inbound normalizados y el directorio.")
+    # --- Visualización ---
+    import plotly.express as px
+    fig_area = px.bar(
+        conteo_area,
+        x="Área", y="Total Llamadas Inbound",
+        title="Total de llamadas Inbound por Área",
+        text="Total Llamadas Inbound"
+    )
+    fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
+    st.plotly_chart(fig_area)
