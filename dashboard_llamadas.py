@@ -167,3 +167,44 @@ st.write(f"📤 Llamadas Salientes: **{llamadas_salientes_agente}**")
 st.write(f"⏱️ Tiempo en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes_agente)}**")
 st.write(f"⏱️ Tiempo en llamadas Salientes: **{formatear_tiempo(tiempo_salientes_agente)}**")
 st.write(f"❌ Outbound IPCC sin contestar: **{no_contestadas_agente}**")
+
+# --- Análisis por Área usando Directorio.xlsx ---
+st.header("📍 Análisis de Origen/Destino según Directorio")
+
+tabs = st.tabs(["📞 Llamadas", "📌 Origen/Destino"])
+
+with tabs[1]:
+    try:
+        directorio = pd.read_excel("Directorio.xlsx")
+    except FileNotFoundError:
+        st.error("Archivo 'Directorio.xlsx' no encontrado en el directorio actual.")
+        st.stop()
+
+    # Normalizar columnas del directorio
+    directorio.columns = [c.strip() for c in directorio.columns]
+    if "Extensión" not in directorio.columns or "Área" not in directorio.columns:
+        st.warning("El archivo 'Directorio.xlsx' debe tener columnas llamadas 'Extensión' y 'Área'.")
+    else:
+        # Asegurarse que sean texto para hacer match correcto
+        directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
+        df["Called Number"] = df["Called Number"].astype(str).str.strip()
+
+        # Unir las llamadas con el directorio
+        df_ubicado = df.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
+        df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+
+        # Contar llamadas por área y tipo
+        resumen_area = df_ubicado.groupby(["Área", "Tipo Llamada"]).size().reset_index(name="Cantidad")
+
+        # Visualización
+        fig_area = px.bar(resumen_area,
+                          x="Área", y="Cantidad", color="Tipo Llamada",
+                          title="Llamadas por Área (según Directorio)",
+                          text="Cantidad")
+        fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
+        st.plotly_chart(fig_area)
+
+        # Tabla detallada
+        st.write("### Detalle de llamadas por Área")
+        st.dataframe(resumen_area)
+
