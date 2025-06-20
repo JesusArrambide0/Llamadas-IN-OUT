@@ -100,7 +100,7 @@ with tab1:
     col1, col2, col3 = st.columns(3)
     col1.metric("Llamadas Entrantes", total_entrantes)
     col2.metric("Llamadas Salientes", total_salientes)
-    col3.metric("Outbound IPCC sin contestar", total_no_contestadas)
+    col3.metric("Marcaciones no contestadas", total_no_contestadas)
 
     st.write(f"⏱️ Tiempo total en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes)}**")
     st.write(f"⏱️ Tiempo total en llamadas Salientes: **{formatear_tiempo(tiempo_salientes)}**")
