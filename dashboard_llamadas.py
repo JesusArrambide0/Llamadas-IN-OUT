@@ -176,9 +176,9 @@ with tab2:
     st.header("📍 Conteo Total de Llamadas por Área (Directorio)")
 
     try:
-        # Leer solo las columnas B y C del Directorio (índices 1 y 2)
-        directorio = pd.read_excel("Directorio.xlsx", usecols=[1, 2], header=0)
-        directorio.columns = ["Extensión", "Área"]  # Forzar nombres de columnas
+        # Leer columnas A, B y C (índices 0,1,2)
+        directorio = pd.read_excel("Directorio.xlsx", usecols=[0,1,2], header=0)
+        directorio.columns = ["Ex", "Extensión", "Área"]
     except FileNotFoundError:
         st.error("Archivo 'Directorio.xlsx' no encontrado.")
         st.stop()
@@ -186,40 +186,52 @@ with tab2:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    st.write("Columnas Directorio:", directorio.columns.tolist())
-
-    # Limpiar texto
+    # Limpiar strings
+    directorio["Ex"] = directorio["Ex"].astype(str).str.strip()
     directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
     df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-    # Mostrar ejemplos sin modificar
-    st.write("Ejemplos 'Called Number' (df):", df["Called Number"].unique()[:20])
-    st.write("Ejemplos 'Extensión' (Directorio):", directorio["Extensión"].unique()[:20])
+    # Extraer sólo números para matching más robusto
+    directorio["Ex_Num"] = directorio["Ex"].str.extract(r'(\d+)$')
+    directorio["Extensión_Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
+    df["Called_Num"] = df["Called Number"].str.extract(r'(\d+)$')
 
-    # Extraer solo dígitos para mejorar matching
-    directorio["Extensión Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
-    df["Called Number Num"] = df["Called Number"].str.extract(r'(\d+)$')
+    # Merge 1: Called_Num con Extensión_Num
+    merge1 = df.merge(directorio[["Extensión_Num", "Área"]], how="left",
+                      left_on="Called_Num", right_on="Extensión_Num")
+    merge1["Fuente"] = "Extensión"
 
-    # Mostrar ejemplos con extracción de dígitos
-    st.write("Ejemplos 'Called Number Num' (df):", df["Called Number Num"].unique()[:20])
-    st.write("Ejemplos 'Extensión Num' (Directorio):", directorio["Extensión Num"].unique()[:20])
+    # Merge 2: Called_Num con Ex_Num
+    merge2 = df.merge(directorio[["Ex_Num", "Área"]], how="left",
+                      left_on="Called_Num", right_on="Ex_Num")
+    merge2["Fuente"] = "Ex"
 
-    # Ahora hacemos merge por la columna con solo números
-    df_ubicado = df.merge(directorio, how="left", left_on="Called Number Num", right_on="Extensión Num")
+    # Contar cuántos nulos hay en cada merge para comparar
+    no_id_merge1 = merge1["Área"].isna().sum()
+    no_id_merge2 = merge2["Área"].isna().sum()
 
-    # Cuántos no se emparejaron
-    no_id = df_ubicado["Área"].isna().sum()
-    total = df_ubicado.shape[0]
-    st.write(f"Llamadas sin área identificada: {no_id} de {total} ({no_id/total*100:.2f}%)")
+    total = df.shape[0]
+    st.write(f"Coincidencias usando Extensión: {total - no_id_merge1} de {total} llamadas")
+    st.write(f"Coincidencias usando Ex: {total - no_id_merge2} de {total} llamadas")
 
-    # Llenar nulos para mostrar
+    # Elegir el merge con más coincidencias (menos NaN en Área)
+    if no_id_merge1 < no_id_merge2:
+        st.write("Se usa la coincidencia por Extensión.")
+        df_ubicado = merge1.copy()
+    else:
+        st.write("Se usa la coincidencia por Ex.")
+        df_ubicado = merge2.copy()
+
+    # Llenar nulos de Área
     df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
+    # Mostrar tabla y gráfico
     conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
     conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
 
     st.dataframe(conteo_area)
 
+    import plotly.express as px
     fig_area = px.bar(conteo_area,
                       x="Área", y="Total Llamadas",
                       title="Total de llamadas por Área",
