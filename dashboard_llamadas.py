@@ -182,12 +182,12 @@ with tab2:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # Preparar datos
+    # Copia y limpieza
     df_filtrado = df.copy()
     df_filtrado["Called Number"] = df_filtrado["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
     directorio["Extensión"] = directorio["Extensión"].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    # Filtro por fechas
+    # Filtro de fechas
     if "Call Start Time" in df_filtrado.columns:
         min_fecha = df_filtrado["Call Start Time"].min().date()
         max_fecha = df_filtrado["Call Start Time"].max().date()
@@ -206,29 +206,36 @@ with tab2:
                 (df_filtrado["Call Start Time"].dt.date <= rango_tab2[1])
             ]
 
-    # Filtrar solo llamadas Inbound
+    # 💡 Diagnóstico: ¿hay llamadas con "Inbound"?
+    total_despues_fecha = len(df_filtrado)
     df_filtrado = df_filtrado[df_filtrado["Call Type"].astype(str).str.contains("Inbound", case=False, na=False)]
+    total_inbound = len(df_filtrado)
 
-    # Buscar coincidencias
-    coincidencias = set(df_filtrado["Called Number"]) & set(directorio["Extensión"])
-    st.write(f"🔎 Coincidencias exactas encontradas (Inbound): {len(coincidencias)}")
+    st.info(f"🔍 Total después del filtro de fechas: {total_despues_fecha}")
+    st.info(f"📥 Llamadas que contienen 'Inbound': {total_inbound}")
 
-    if coincidencias:
-        df_ubicado = df_filtrado.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
-        df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
-
-        conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas Inbound")
-        conteo_area = conteo_area.sort_values(by="Total Llamadas Inbound", ascending=False)
-
-        st.subheader("📊 Total de llamadas Inbound por Área")
-        st.dataframe(conteo_area)
-
-        import plotly.express as px
-        fig_area = px.bar(conteo_area,
-                          x="Área", y="Total Llamadas Inbound",
-                          title="Total de llamadas Inbound por Área",
-                          text="Total Llamadas Inbound")
-        fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
-        st.plotly_chart(fig_area)
+    if total_inbound == 0:
+        st.warning("❌ No se encontraron llamadas Inbound en el rango seleccionado.")
     else:
-        st.warning("❌ No se encontraron llamadas Inbound que coincidan con el directorio en el rango seleccionado.")
+        coincidencias = set(df_filtrado["Called Number"]) & set(directorio["Extensión"])
+        st.write(f"🔎 Coincidencias exactas encontradas (Inbound): {len(coincidencias)}")
+
+        if coincidencias:
+            df_ubicado = df_filtrado.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
+            df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+
+            conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas Inbound")
+            conteo_area = conteo_area.sort_values(by="Total Llamadas Inbound", ascending=False)
+
+            st.subheader("📊 Total de llamadas Inbound por Área")
+            st.dataframe(conteo_area)
+
+            import plotly.express as px
+            fig_area = px.bar(conteo_area,
+                              x="Área", y="Total Llamadas Inbound",
+                              title="Total de llamadas Inbound por Área",
+                              text="Total Llamadas Inbound")
+            fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
+            st.plotly_chart(fig_area)
+        else:
+            st.warning("❌ No hay coincidencias entre los números Inbound y el directorio.")
