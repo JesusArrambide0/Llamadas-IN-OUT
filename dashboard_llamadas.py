@@ -173,55 +173,39 @@ with tab1:
 
 # Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
 with tab2:
-    st.header("🔍 Diagnóstico de llamadas internas y directorio")
+    st.header("📍 Conteo Total de Llamadas por Área (usando Directorio completo)")
 
     try:
-        directorio = pd.read_excel("Directorio.xlsx", usecols=[0, 1, 2], header=0)
-        directorio.columns = ["Ex", "Extensión", "Área"]
+        directorio = pd.read_excel("Directorio.xlsx", usecols=[1, 2], header=0)  # B=Extensión, C=Área
+        directorio.columns = ["Extensión", "Área"]
     except Exception as e:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # Convertir todo a texto limpio
+    # Limpiar y convertir a texto
     df["Called Number"] = df["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
     directorio["Extensión"] = directorio["Extensión"].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    # Solo llamadas internas: que empiezan con 85494 y son de longitud suficiente
-    df["Extensión_Calculada"] = df["Called Number"].apply(
-        lambda x: x[-4:] if x.startswith("85494") and len(x) >= 9 else None
-    )
+    # Mostrar coincidencias encontradas
+    coincidencias = set(df["Called Number"]) & set(directorio["Extensión"])
+    st.write(f"🔎 Coincidencias exactas encontradas: {len(coincidencias)}")
 
-    # Mostrar datos para comparar
-    st.subheader("📋 Ejemplo de mapeo de llamadas internas")
-    st.write(df[["Called Number", "Extensión_Calculada"]].dropna().drop_duplicates().head(20))
-
-    st.subheader("📋 Ejemplo de extensiones en Directorio")
-    st.write(directorio[["Extensión", "Área"]].drop_duplicates().head(20))
-
-    # Verificar si hay alguna coincidencia
-    coincidencias = set(df["Extensión_Calculada"].dropna()) & set(directorio["Extensión"])
-    st.write(f"🔎 Extensiones coincidentes encontradas: {len(coincidencias)}")
     if coincidencias:
-        st.write("Ejemplo de coincidencias:", list(coincidencias)[:10])
-    else:
-        st.warning("No se encontró ninguna coincidencia entre las extensiones extraídas y las del directorio.")
-
-    # Hacer merge sólo si hay alguna coincidencia
-    if len(coincidencias) > 0:
-        df_ubicado = df.merge(directorio[["Extensión", "Área"]], how="left",
-                              left_on="Extensión_Calculada", right_on="Extensión")
+        df_ubicado = df.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
         df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
         conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
         conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
 
-        st.subheader("📊 Total de llamadas internas por área")
+        st.subheader("📊 Total de llamadas por Área")
         st.dataframe(conteo_area)
 
         import plotly.express as px
         fig_area = px.bar(conteo_area,
                           x="Área", y="Total Llamadas",
-                          title="Total de llamadas internas por Área",
+                          title="Total de llamadas por Área",
                           text="Total Llamadas")
         fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
         st.plotly_chart(fig_area)
+    else:
+        st.warning("❌ No se encontraron coincidencias exactas entre los números marcados y el directorio.")
