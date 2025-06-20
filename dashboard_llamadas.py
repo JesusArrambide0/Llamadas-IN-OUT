@@ -173,39 +173,47 @@ with tab1:
 
 # Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
 with tab2:
-    st.header("📍 Depuración de Coincidencias entre Directorio y Llamadas")
+    st.header("📍 Conteo Total de Llamadas por Área (Directorio)")
 
     try:
+        # Leer columnas A, B y C
         directorio = pd.read_excel("Directorio.xlsx", usecols=[0,1,2], header=0)
         directorio.columns = ["Ex", "Extensión", "Área"]
     except Exception as e:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # Limpiar y convertir a string
-    directorio["Ex"] = directorio["Ex"].astype(str).str.strip()
-    directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
-    df["Called Number"] = df["Called Number"].astype(str).str.strip()
+    # Convertir todo a string y limpiar
+    df["Called Number"] = df["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
+    directorio["Extensión"] = directorio["Extensión"].astype(str).str.replace('.0', '', regex=False).str.strip()
+    directorio["Ex"] = directorio["Ex"].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    # Mostrar conteos y algunos ejemplos
-    st.write("Total llamadas (df):", len(df))
-    st.write("Total números únicos Called Number:", df["Called Number"].nunique())
-    st.write("Ejemplos únicos Called Number (20):", df["Called Number"].unique()[:20])
+    # Extraer últimos 4 dígitos para llamadas internas (con 85494)
+    df["Extensión_Calculada"] = df["Called Number"].apply(
+        lambda x: x[-4:] if x.startswith("85494") and len(x) >= 9 else None
+    )
 
-    st.write("Total números únicos Directorio Ex:", directorio["Ex"].nunique())
-    st.write("Ejemplos únicos Ex (20):", directorio["Ex"].unique()[:20])
+    # Mostrar algunos ejemplos para verificar
+    st.write("Ejemplos Called Number:", df["Called Number"].unique()[:10])
+    st.write("Extensiones calculadas:", df["Extensión_Calculada"].dropna().unique()[:10])
 
-    st.write("Total números únicos Directorio Extensión:", directorio["Extensión"].nunique())
-    st.write("Ejemplos únicos Extensión (20):", directorio["Extensión"].unique()[:20])
+    # Merge por extensión calculada
+    df_ubicado = df.merge(directorio[["Extensión", "Área"]], how="left",
+                          left_on="Extensión_Calculada", right_on="Extensión")
 
-    # Ahora comparar longitud promedio y tipos de valores
-    st.write("Longitud promedio Called Number:", df["Called Number"].map(len).mean())
-    st.write("Longitud promedio Directorio Ex:", directorio["Ex"].map(len).mean())
-    st.write("Longitud promedio Directorio Extensión:", directorio["Extensión"].map(len).mean())
+    # Llenar nulos
+    df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
-    # Mostrar diferencias básicas: cuáles llamados no aparecen en directorio (usando Extensión)
-    llamadas_no_en_directorio_ext = set(df["Called Number"]) - set(directorio["Extensión"])
-    st.write(f"Llamadas no encontradas en Directorio Extensión (muestra 20):", list(llamadas_no_en_directorio_ext)[:20])
+    # Conteo
+    conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
+    conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
 
-    llamadas_no_en_directorio_ex = set(df["Called Number"]) - set(directorio["Ex"])
-    st.write(f"Llamadas no encontradas en Directorio Ex (muestra 20):", list(llamadas_no_en_directorio_ex)[:20])
+    st.dataframe(conteo_area)
+
+    import plotly.express as px
+    fig_area = px.bar(conteo_area,
+                      x="Área", y="Total Llamadas",
+                      title="Total de llamadas por Área (internas)",
+                      text="Total Llamadas")
+    fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
+    st.plotly_chart(fig_area)
