@@ -80,7 +80,7 @@ df["Tipo Número"] = df["Called Number"].apply(lambda x: "Interno" if x.startswi
 df["Duración Segundos"] = df["Duration"].apply(duration_to_seconds)
 df["Talk Segundos"] = df["Talk Time"].apply(talk_time_a_segundos)
 
-# --- Indicadores Generales ---
+# --- Indicadores Generales básicos ---
 total_entrantes = df[df["Tipo Llamada"] == "Entrante"].shape[0]
 total_salientes = df[df["Tipo Llamada"] == "Saliente"].shape[0]
 tiempo_entrantes = df[df["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
@@ -91,120 +91,114 @@ outbound_ipcc = df[df["Call Type Limpio"] == "outbound on ipcc"]
 outbound_ipcc_0 = outbound_ipcc[outbound_ipcc["Talk Segundos"] == 0]
 total_no_contestadas = len(outbound_ipcc_0)
 
-# Mostrar métricas
-st.header("📊 Indicadores Generales")
-col1, col2, col3 = st.columns(3)
-col1.metric("Llamadas Entrantes", total_entrantes)
-col2.metric("Llamadas Salientes", total_salientes)
-col3.metric("Outbound IPCC sin contestar", total_no_contestadas)
+# --- Crear pestañas para separar la vista ---
+tab1, tab2 = st.tabs(["📊 Indicadores Generales", "📍 Llamadas por Área"])
 
-st.write(f"⏱️ Tiempo total en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes)}**")
-st.write(f"⏱️ Tiempo total en llamadas Salientes: **{formatear_tiempo(tiempo_salientes)}**")
+# Pestaña 1: Indicadores Generales y visualizaciones que ya tenías
+with tab1:
+    st.header("📊 Indicadores Generales")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Llamadas Entrantes", total_entrantes)
+    col2.metric("Llamadas Salientes", total_salientes)
+    col3.metric("Outbound IPCC sin contestar", total_no_contestadas)
 
-# Tabla resumen
-porcentaje = (total_no_contestadas / len(outbound_ipcc) * 100) if len(outbound_ipcc) > 0 else 0
-df_resumen_ipcc = pd.DataFrame({
-    "Total Outbound on IPCC": [len(outbound_ipcc)],
-    "Outbound on IPCC con tiempo 0": [total_no_contestadas],
-    "Porcentaje (%)": [f"{porcentaje:.2f}%"]
-})
+    st.write(f"⏱️ Tiempo total en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes)}**")
+    st.write(f"⏱️ Tiempo total en llamadas Salientes: **{formatear_tiempo(tiempo_salientes)}**")
 
-st.write("### Resumen llamadas Outbound on IPCC con duración 0")
-st.write(df_resumen_ipcc)
+    # Tabla resumen Outbound IPCC
+    porcentaje = (total_no_contestadas / len(outbound_ipcc) * 100) if len(outbound_ipcc) > 0 else 0
+    df_resumen_ipcc = pd.DataFrame({
+        "Total Outbound on IPCC": [len(outbound_ipcc)],
+        "Outbound on IPCC con tiempo 0": [total_no_contestadas],
+        "Porcentaje (%)": [f"{porcentaje:.2f}%"]
+    })
+    st.write("### Resumen llamadas Outbound on IPCC con duración 0")
+    st.write(df_resumen_ipcc)
 
-# --- Visualizaciones ---
-st.subheader("📈 Visualizaciones Generales")
+    # Visualizaciones generales
+    st.subheader("📈 Visualizaciones Generales")
 
-# Tipo de llamada
-conteo_tipo = df["Tipo Llamada"].value_counts().reset_index()
-conteo_tipo.columns = ["Tipo Llamada", "Cantidad"]
-fig_tipo = px.bar(conteo_tipo, x="Tipo Llamada", y="Cantidad", title="Cantidad de Llamadas por Tipo",
-                  color="Tipo Llamada", text="Cantidad")
-st.plotly_chart(fig_tipo)
+    # Tipo de llamada
+    conteo_tipo = df["Tipo Llamada"].value_counts().reset_index()
+    conteo_tipo.columns = ["Tipo Llamada", "Cantidad"]
+    fig_tipo = px.bar(conteo_tipo, x="Tipo Llamada", y="Cantidad", title="Cantidad de Llamadas por Tipo",
+                      color="Tipo Llamada", text="Cantidad")
+    st.plotly_chart(fig_tipo)
 
-# Por agente
-conteo_agente = df.groupby("Agent Name").size().reset_index(name="Total Llamadas")
-fig_agente = px.bar(conteo_agente.sort_values("Total Llamadas", ascending=False),
-                    x="Agent Name", y="Total Llamadas", title="Total de llamadas por agente",
-                    text="Total Llamadas")
-fig_agente.update_layout(xaxis={'categoryorder': 'total descending'})
-st.plotly_chart(fig_agente)
+    # Por agente
+    conteo_agente = df.groupby("Agent Name").size().reset_index(name="Total Llamadas")
+    fig_agente = px.bar(conteo_agente.sort_values("Total Llamadas", ascending=False),
+                        x="Agent Name", y="Total Llamadas", title="Total de llamadas por agente",
+                        text="Total Llamadas")
+    fig_agente.update_layout(xaxis={'categoryorder': 'total descending'})
+    st.plotly_chart(fig_agente)
 
-# Histograma duración
-df_duracion_valida = df[df["Talk Segundos"] > 0]
-if not df_duracion_valida.empty:
-    fig_duracion = px.histogram(df_duracion_valida, 
-                                x="Talk Segundos", nbins=30,
-                                title="Distribución de Duración de Llamadas (en segundos)")
-    st.plotly_chart(fig_duracion)
-else:
-    st.warning("No hay llamadas con duración positiva para graficar.")
+    # Histograma duración
+    df_duracion_valida = df[df["Talk Segundos"] > 0]
+    if not df_duracion_valida.empty:
+        fig_duracion = px.histogram(df_duracion_valida, 
+                                    x="Talk Segundos", nbins=30,
+                                    title="Distribución de Duración de Llamadas (en segundos)")
+        st.plotly_chart(fig_duracion)
+    else:
+        st.warning("No hay llamadas con duración positiva para graficar.")
 
-# Llamadas por día
-llamadas_diarias = df.groupby(df["Call Start Time"].dt.date).size().reset_index(name="Cantidad")
-fig_diario = px.line(llamadas_diarias, x="Call Start Time", y="Cantidad",
-                     title="Llamadas por Día", markers=True)
-st.plotly_chart(fig_diario)
+    # Llamadas por día
+    llamadas_diarias = df.groupby(df["Call Start Time"].dt.date).size().reset_index(name="Cantidad")
+    fig_diario = px.line(llamadas_diarias, x="Call Start Time", y="Cantidad",
+                         title="Llamadas por Día", markers=True)
+    st.plotly_chart(fig_diario)
 
-# --- Indicadores por agente ---
-st.header("👤 Indicadores por Agente")
-agentes = sorted(df["Agent Name"].dropna().unique())
-agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=agentes)
+    # --- Indicadores por agente ---
+    st.header("👤 Indicadores por Agente")
+    agentes = sorted(df["Agent Name"].dropna().unique())
+    agente_seleccionado = st.selectbox("Selecciona un agente para filtrar", options=agentes)
 
-df_agente = df[df["Agent Name"] == agente_seleccionado]
-llamadas_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"].shape[0]
-llamadas_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"].shape[0]
-tiempo_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
-tiempo_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
-no_contestadas_agente = df_agente[
-    (df_agente["Call Type Limpio"] == "outbound on ipcc") & 
-    (df_agente["Talk Segundos"] == 0)
-].shape[0]
+    df_agente = df[df["Agent Name"] == agente_seleccionado]
+    llamadas_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"].shape[0]
+    llamadas_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"].shape[0]
+    tiempo_entrantes_agente = df_agente[df_agente["Tipo Llamada"] == "Entrante"]["Duración Segundos"].sum()
+    tiempo_salientes_agente = df_agente[df_agente["Tipo Llamada"] == "Saliente"]["Duración Segundos"].sum()
+    no_contestadas_agente = df_agente[
+        (df_agente["Call Type Limpio"] == "outbound on ipcc") & 
+        (df_agente["Talk Segundos"] == 0)
+    ].shape[0]
 
-st.write(f"**Agente:** {agente_seleccionado}")
-st.write(f"📥 Llamadas Entrantes: **{llamadas_entrantes_agente}**")
-st.write(f"📤 Llamadas Salientes: **{llamadas_salientes_agente}**")
-st.write(f"⏱️ Tiempo en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes_agente)}**")
-st.write(f"⏱️ Tiempo en llamadas Salientes: **{formatear_tiempo(tiempo_salientes_agente)}**")
-st.write(f"❌ Outbound IPCC sin contestar: **{no_contestadas_agente}**")
+    st.write(f"**Agente:** {agente_seleccionado}")
+    st.write(f"📥 Llamadas Entrantes: **{llamadas_entrantes_agente}**")
+    st.write(f"📤 Llamadas Salientes: **{llamadas_salientes_agente}**")
+    st.write(f"⏱️ Tiempo en llamadas Entrantes: **{formatear_tiempo(tiempo_entrantes_agente)}**")
+    st.write(f"⏱️ Tiempo en llamadas Salientes: **{formatear_tiempo(tiempo_salientes_agente)}**")
+    st.write(f"❌ Outbound IPCC sin contestar: **{no_contestadas_agente}**")
 
-# --- Análisis por Área usando Directorio.xlsx ---
-st.header("📍 Análisis de Origen/Destino según Directorio")
+# Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
+with tab2:
+    st.header("📍 Conteo Total de Llamadas por Área (Directorio)")
 
-tabs = st.tabs(["📞 Llamadas", "📌 Origen/Destino"])
-
-with tabs[1]:
     try:
         directorio = pd.read_excel("Directorio.xlsx")
     except FileNotFoundError:
-        st.error("Archivo 'Directorio.xlsx' no encontrado en el directorio actual.")
+        st.error("Archivo 'Directorio.xlsx' no encontrado.")
         st.stop()
 
-    # Normalizar columnas del directorio
     directorio.columns = [c.strip() for c in directorio.columns]
     if "Extensión" not in directorio.columns or "Área" not in directorio.columns:
-        st.warning("El archivo 'Directorio.xlsx' debe tener columnas llamadas 'Extensión' y 'Área'.")
+        st.warning("El archivo 'Directorio.xlsx' debe tener columnas 'Extensión' y 'Área'.")
     else:
-        # Asegurarse que sean texto para hacer match correcto
         directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
         df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-        # Unir las llamadas con el directorio
         df_ubicado = df.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
         df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
-        # Contar llamadas por área y tipo
-        resumen_area = df_ubicado.groupby(["Área", "Tipo Llamada"]).size().reset_index(name="Cantidad")
+        conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
+        conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
 
-        # Visualización
-        fig_area = px.bar(resumen_area,
-                          x="Área", y="Cantidad", color="Tipo Llamada",
-                          title="Llamadas por Área (según Directorio)",
-                          text="Cantidad")
+        st.dataframe(conteo_area)
+
+        fig_area = px.bar(conteo_area,
+                          x="Área", y="Total Llamadas",
+                          title="Total de llamadas por Área",
+                          text="Total Llamadas")
         fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
         st.plotly_chart(fig_area)
-
-        # Tabla detallada
-        st.write("### Detalle de llamadas por Área")
-        st.dataframe(resumen_area)
-
