@@ -176,40 +176,53 @@ with tab2:
     st.header("📍 Conteo Total de Llamadas por Área (Directorio)")
 
     try:
-        directorio = pd.read_excel("Directorio.xlsx")
+        # Leer solo las columnas B y C del Directorio (índices 1 y 2)
+        directorio = pd.read_excel("Directorio.xlsx", usecols=[1, 2], header=0)
+        directorio.columns = ["Extensión", "Área"]  # Forzar nombres de columnas
     except FileNotFoundError:
         st.error("Archivo 'Directorio.xlsx' no encontrado.")
         st.stop()
+    except Exception as e:
+        st.error(f"Error leyendo 'Directorio.xlsx': {e}")
+        st.stop()
 
-    directorio.columns = [c.strip() for c in directorio.columns]
-    if "Extensión" not in directorio.columns or "Área" not in directorio.columns:
-        st.warning("El archivo 'Directorio.xlsx' debe tener columnas 'Extensión' y 'Área'.")
-    else:
-        # Normalizar cadenas y extraer solo dígitos para hacer match más robusto
-        directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
-        df["Called Number"] = df["Called Number"].astype(str).str.strip()
+    st.write("Columnas Directorio:", directorio.columns.tolist())
 
-        directorio["Extensión Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
-        df["Called Number Num"] = df["Called Number"].str.extract(r'(\d+)$')
+    # Limpiar texto
+    directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
+    df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-        st.write("Ejemplos 'Called Number Num':", df["Called Number Num"].unique()[:10])
-        st.write("Ejemplos 'Extensión Num' Directorio:", directorio["Extensión Num"].unique()[:10])
+    # Mostrar ejemplos sin modificar
+    st.write("Ejemplos 'Called Number' (df):", df["Called Number"].unique()[:20])
+    st.write("Ejemplos 'Extensión' (Directorio):", directorio["Extensión"].unique()[:20])
 
-        df_ubicado = df.merge(directorio, how="left", left_on="Called Number Num", right_on="Extensión Num")
-        df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+    # Extraer solo dígitos para mejorar matching
+    directorio["Extensión Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
+    df["Called Number Num"] = df["Called Number"].str.extract(r'(\d+)$')
 
-        no_id = df_ubicado[df_ubicado["Área"] == "No identificado"].shape[0]
-        total = df_ubicado.shape[0]
-        st.write(f"Llamadas sin área identificada: {no_id} de {total} ({no_id/total*100:.2f}%)")
+    # Mostrar ejemplos con extracción de dígitos
+    st.write("Ejemplos 'Called Number Num' (df):", df["Called Number Num"].unique()[:20])
+    st.write("Ejemplos 'Extensión Num' (Directorio):", directorio["Extensión Num"].unique()[:20])
 
-        conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
-        conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
+    # Ahora hacemos merge por la columna con solo números
+    df_ubicado = df.merge(directorio, how="left", left_on="Called Number Num", right_on="Extensión Num")
 
-        st.dataframe(conteo_area)
+    # Cuántos no se emparejaron
+    no_id = df_ubicado["Área"].isna().sum()
+    total = df_ubicado.shape[0]
+    st.write(f"Llamadas sin área identificada: {no_id} de {total} ({no_id/total*100:.2f}%)")
 
-        fig_area = px.bar(conteo_area,
-                          x="Área", y="Total Llamadas",
-                          title="Total de llamadas por Área",
-                          text="Total Llamadas")
-        fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
-        st.plotly_chart(fig_area)
+    # Llenar nulos para mostrar
+    df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
+
+    conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
+    conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
+
+    st.dataframe(conteo_area)
+
+    fig_area = px.bar(conteo_area,
+                      x="Área", y="Total Llamadas",
+                      title="Total de llamadas por Área",
+                      text="Total Llamadas")
+    fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
+    st.plotly_chart(fig_area)
