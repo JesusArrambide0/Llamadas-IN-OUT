@@ -173,68 +173,39 @@ with tab1:
 
 # Pestaña 2: Conteo total de llamadas por Área cruzando con Directorio.xlsx
 with tab2:
-    st.header("📍 Conteo Total de Llamadas por Área (Directorio)")
+    st.header("📍 Depuración de Coincidencias entre Directorio y Llamadas")
 
     try:
-        # Leer columnas A, B y C (índices 0,1,2)
         directorio = pd.read_excel("Directorio.xlsx", usecols=[0,1,2], header=0)
         directorio.columns = ["Ex", "Extensión", "Área"]
-    except FileNotFoundError:
-        st.error("Archivo 'Directorio.xlsx' no encontrado.")
-        st.stop()
     except Exception as e:
         st.error(f"Error leyendo 'Directorio.xlsx': {e}")
         st.stop()
 
-    # Limpiar strings
+    # Limpiar y convertir a string
     directorio["Ex"] = directorio["Ex"].astype(str).str.strip()
     directorio["Extensión"] = directorio["Extensión"].astype(str).str.strip()
     df["Called Number"] = df["Called Number"].astype(str).str.strip()
 
-    # Extraer sólo números para matching más robusto
-    directorio["Ex_Num"] = directorio["Ex"].str.extract(r'(\d+)$')
-    directorio["Extensión_Num"] = directorio["Extensión"].str.extract(r'(\d+)$')
-    df["Called_Num"] = df["Called Number"].str.extract(r'(\d+)$')
+    # Mostrar conteos y algunos ejemplos
+    st.write("Total llamadas (df):", len(df))
+    st.write("Total números únicos Called Number:", df["Called Number"].nunique())
+    st.write("Ejemplos únicos Called Number (20):", df["Called Number"].unique()[:20])
 
-    # Merge 1: Called_Num con Extensión_Num
-    merge1 = df.merge(directorio[["Extensión_Num", "Área"]], how="left",
-                      left_on="Called_Num", right_on="Extensión_Num")
-    merge1["Fuente"] = "Extensión"
+    st.write("Total números únicos Directorio Ex:", directorio["Ex"].nunique())
+    st.write("Ejemplos únicos Ex (20):", directorio["Ex"].unique()[:20])
 
-    # Merge 2: Called_Num con Ex_Num
-    merge2 = df.merge(directorio[["Ex_Num", "Área"]], how="left",
-                      left_on="Called_Num", right_on="Ex_Num")
-    merge2["Fuente"] = "Ex"
+    st.write("Total números únicos Directorio Extensión:", directorio["Extensión"].nunique())
+    st.write("Ejemplos únicos Extensión (20):", directorio["Extensión"].unique()[:20])
 
-    # Contar cuántos nulos hay en cada merge para comparar
-    no_id_merge1 = merge1["Área"].isna().sum()
-    no_id_merge2 = merge2["Área"].isna().sum()
+    # Ahora comparar longitud promedio y tipos de valores
+    st.write("Longitud promedio Called Number:", df["Called Number"].map(len).mean())
+    st.write("Longitud promedio Directorio Ex:", directorio["Ex"].map(len).mean())
+    st.write("Longitud promedio Directorio Extensión:", directorio["Extensión"].map(len).mean())
 
-    total = df.shape[0]
-    st.write(f"Coincidencias usando Extensión: {total - no_id_merge1} de {total} llamadas")
-    st.write(f"Coincidencias usando Ex: {total - no_id_merge2} de {total} llamadas")
+    # Mostrar diferencias básicas: cuáles llamados no aparecen en directorio (usando Extensión)
+    llamadas_no_en_directorio_ext = set(df["Called Number"]) - set(directorio["Extensión"])
+    st.write(f"Llamadas no encontradas en Directorio Extensión (muestra 20):", list(llamadas_no_en_directorio_ext)[:20])
 
-    # Elegir el merge con más coincidencias (menos NaN en Área)
-    if no_id_merge1 < no_id_merge2:
-        st.write("Se usa la coincidencia por Extensión.")
-        df_ubicado = merge1.copy()
-    else:
-        st.write("Se usa la coincidencia por Ex.")
-        df_ubicado = merge2.copy()
-
-    # Llenar nulos de Área
-    df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
-
-    # Mostrar tabla y gráfico
-    conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
-    conteo_area = conteo_area.sort_values(by="Total Llamadas", ascending=False)
-
-    st.dataframe(conteo_area)
-
-    import plotly.express as px
-    fig_area = px.bar(conteo_area,
-                      x="Área", y="Total Llamadas",
-                      title="Total de llamadas por Área",
-                      text="Total Llamadas")
-    fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
-    st.plotly_chart(fig_area)
+    llamadas_no_en_directorio_ex = set(df["Called Number"]) - set(directorio["Ex"])
+    st.write(f"Llamadas no encontradas en Directorio Ex (muestra 20):", list(llamadas_no_en_directorio_ex)[:20])
