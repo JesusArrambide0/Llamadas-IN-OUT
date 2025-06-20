@@ -183,15 +183,35 @@ with tab2:
         st.stop()
 
     # Limpiar y convertir a texto
-    df["Called Number"] = df["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_filtrado = df.copy()
+    df_filtrado["Called Number"] = df_filtrado["Called Number"].astype(str).str.replace('.0', '', regex=False).str.strip()
     directorio["Extensión"] = directorio["Extensión"].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    # Mostrar coincidencias encontradas
-    coincidencias = set(df["Called Number"]) & set(directorio["Extensión"])
+    # Filtro de fechas
+    if "Call Start Time" in df_filtrado.columns:
+        min_fecha = df_filtrado["Call Start Time"].min().date()
+        max_fecha = df_filtrado["Call Start Time"].max().date()
+
+        rango_tab2 = st.date_input(
+            "📅 Selecciona rango de fechas para llamadas:",
+            value=(min_fecha, max_fecha),
+            min_value=min_fecha,
+            max_value=max_fecha,
+            key="rango_tab2"
+        )
+
+        if isinstance(rango_tab2, tuple) and len(rango_tab2) == 2:
+            df_filtrado = df_filtrado[
+                (df_filtrado["Call Start Time"].dt.date >= rango_tab2[0]) &
+                (df_filtrado["Call Start Time"].dt.date <= rango_tab2[1])
+            ]
+
+    # Buscar coincidencias
+    coincidencias = set(df_filtrado["Called Number"]) & set(directorio["Extensión"])
     st.write(f"🔎 Coincidencias exactas encontradas: {len(coincidencias)}")
 
     if coincidencias:
-        df_ubicado = df.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
+        df_ubicado = df_filtrado.merge(directorio, how="left", left_on="Called Number", right_on="Extensión")
         df_ubicado["Área"] = df_ubicado["Área"].fillna("No identificado")
 
         conteo_area = df_ubicado.groupby("Área").size().reset_index(name="Total Llamadas")
@@ -208,4 +228,4 @@ with tab2:
         fig_area.update_layout(xaxis={'categoryorder': 'total descending'})
         st.plotly_chart(fig_area)
     else:
-        st.warning("❌ No se encontraron coincidencias exactas entre los números marcados y el directorio.")
+        st.warning("❌ No se encontraron coincidencias exactas entre los números marcados y el directorio en el rango de fechas seleccionado.")
